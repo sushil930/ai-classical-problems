@@ -7,7 +7,7 @@ function makeGrid(): Grid {
   return Array.from({ length: GRID_SIZE }, () => Array.from({ length: GRID_SIZE }, () => 0));
 }
 
-type Mode = 'draw' | 'wall' | 'start' | 'goal';
+type Mode = 'draw' | 'start' | 'goal';
 
 type RunState = {
   steps: BfsEvent[];
@@ -24,7 +24,7 @@ export default function App() {
   const [stepIndex, setStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speedMs, setSpeedMs] = useState(300);
-  const dragging = useRef(false);
+  const dragging = useRef<false | 'left' | 'right'>(false);
 
   const currentEvent = useMemo(() => run.steps[stepIndex], [run.steps, stepIndex]);
 
@@ -54,7 +54,7 @@ export default function App() {
     return () => clearTimeout(id);
   }, [isPlaying, stepIndex, run.steps.length, speedMs]);
 
-  const handleCellAction = (r: number, c: number) => {
+  const handleCellAction = (r: number, c: number, isRightClick: boolean = false) => {
     if (mode === 'start') {
       if (goal.row === r && goal.col === c) return;
       setStart({ row: r, col: c });
@@ -65,18 +65,15 @@ export default function App() {
       setGoal({ row: r, col: c });
       return;
     }
-    setGrid((g) => {
-      if (start.row === r && start.col === c) return g;
-      if (goal.row === r && goal.col === c) return g;
-      const next = g.map((row) => [...row]);
-      const isWall = g[r][c] === 1;
-      if (mode === 'wall') {
-        next[r][c] = 1;
-      } else {
-        next[r][c] = isWall ? 0 : 1;
-      }
-      return next;
-    });
+    if (mode === 'draw') {
+      setGrid((g) => {
+        if (start.row === r && start.col === c) return g;
+        if (goal.row === r && goal.col === c) return g;
+        const next = g.map((row) => [...row]);
+        next[r][c] = isRightClick ? 1 : 0; // Right-click draws, left-click erases
+        return next;
+      });
+    }
   };
 
   const runBfs = () => {
@@ -176,7 +173,6 @@ export default function App() {
             <div className="mode-buttons">
               {[
                 ['Draw', 'draw'],
-                ['Wall', 'wall'],
                 ['Start', 'start'],
                 ['Goal', 'goal'],
               ].map(([label, value]) => (
@@ -195,9 +191,12 @@ export default function App() {
         <div className="grid-container">
           <div
             className="grid"
-            style={{ cursor: mode === 'draw' || mode === 'wall' ? 'crosshair' : 'pointer' }}
-            onMouseDown={() => {
+            style={{ cursor: mode === 'draw' ? 'crosshair' : 'pointer' }}
+            onContextMenu={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
               dragging.current = true;
+              if (e.button === 2) dragging.current = 'right';
+              else dragging.current = 'left';
             }}
             onMouseUp={() => {
               dragging.current = false;
@@ -217,11 +216,16 @@ export default function App() {
                     key={`${r}-${c}`}
                     className={`cell${isPath ? ' path' : ''}`}
                     style={{ background: cellColor(r, c) }}
-                    onMouseDown={() => handleCellAction(r, c)}
-                    onMouseEnter={() => {
-                      if (dragging.current && (mode === 'wall' || mode === 'draw')) handleCellAction(r, c);
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleCellAction(r, c, e.button === 2);
                     }}
-                    onClick={() => handleCellAction(r, c)}
+                    onMouseEnter={(e) => {
+                      if (dragging.current && mode === 'draw') {
+                        handleCellAction(r, c, dragging.current === 'right');
+                      }
+                    }}
+                    onContextMenu={(e) => e.preventDefault()}
                   />
                 );
               }),
