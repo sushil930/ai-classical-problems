@@ -1,0 +1,11 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #0f1115; color: #e6e6e6; }
+main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+button, input[type="range"] { font: inherit; }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.grid { display: grid; grid-template-columns: repeat(20, 24px); grid-auto-rows: 24px; gap: 2px; }
+.cell { width: 24px; height: 24px; border-radius: 4px; transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease; }
+.cell.path { box-shadow: 0 0 10px 4px rgba(108, 92, 231, 0.6); outline: 2px solid white; transform: scale(1.05); }
+.legend { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend-swatch { width: 16px; height: 16px; border-radius: 3px; }
