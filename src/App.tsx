@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { bfsEngine, type BfsEvent, type Cell, type Grid } from './engine/bfs';
+import TreeView from './components/TreeView';
 
 const GRID_SIZE = 20;
 
@@ -8,10 +9,12 @@ function makeGrid(): Grid {
 }
 
 type Mode = 'draw' | 'start' | 'goal';
+type ViewMode = 'grid' | 'tree';
 
 type RunState = {
   steps: BfsEvent[];
   path: Cell[];
+  pathIds: string[];
   status: BfsEvent['status'] | null;
 };
 
@@ -20,7 +23,8 @@ export default function App() {
   const [start, setStart] = useState<Cell>({ row: 0, col: 0 });
   const [goal, setGoal] = useState<Cell>({ row: GRID_SIZE - 1, col: GRID_SIZE - 1 });
   const [mode, setMode] = useState<Mode>('draw');
-  const [run, setRun] = useState<RunState>({ steps: [], path: [], status: null });
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [run, setRun] = useState<RunState>({ steps: [], path: [], pathIds: [], status: null });
   const [stepIndex, setStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speedMs, setSpeedMs] = useState(300);
@@ -39,7 +43,7 @@ export default function App() {
 
   useEffect(() => {
     // reset BFS playback when grid or endpoints change
-    setRun({ steps: [], path: [], status: null });
+    setRun({ steps: [], path: [], pathIds: [], status: null });
     setStepIndex(0);
     setIsPlaying(false);
   }, [grid, start, goal]);
@@ -78,15 +82,15 @@ export default function App() {
 
   const runBfs = () => {
     if (!start || !goal) return;
-    const { steps, path, status } = bfsEngine({ start, goal, grid });
-    setRun({ steps, path, status });
+    const { steps, path, pathIds, status } = bfsEngine({ start, goal, grid });
+    setRun({ steps, path, pathIds: pathIds || [], status });
     setStepIndex(0);
     setIsPlaying(false);
   };
 
   const reset = () => {
     setGrid(makeGrid());
-    setRun({ steps: [], path: [], status: null });
+    setRun({ steps: [], path: [], pathIds: [], status: null });
     setStepIndex(0);
     setIsPlaying(false);
     setStart({ row: 0, col: 0 });
@@ -134,6 +138,24 @@ export default function App() {
       
       <div className="layout">
         <div className="panel controls">
+          <div className="control-group">
+            <label>View Mode</label>
+            <div className="mode-buttons">
+              {[
+                ['Grid', 'grid'],
+                ['Tree', 'tree'],
+              ].map(([label, value]) => (
+                <button
+                  key={value}
+                  onClick={() => setViewMode(value as ViewMode)}
+                  className={viewMode === value ? 'active' : ''}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="control-group">
             <label>Algorithm Control</label>
             <button 
@@ -189,70 +211,83 @@ export default function App() {
         </div>
 
         <div className="grid-container">
-          <div
-            className="grid"
-            style={{ cursor: mode === 'draw' ? 'crosshair' : 'pointer' }}
-            onContextMenu={(e) => e.preventDefault()}
-            onMouseDown={(e) => {
-              dragging.current = true;
-              if (e.button === 2) dragging.current = 'right';
-              else dragging.current = 'left';
-            }}
-            onMouseUp={() => {
-              dragging.current = false;
-            }}
-            onMouseLeave={() => {
-              dragging.current = false;
-            }}
-          >
-            {grid.map((row, r) =>
-              row.map((_, c) => {
-                const isPath =
-                  pathSet.has(`${r},${c}`) &&
-                  run.status === 'goal-found' &&
-                  stepIndex === run.steps.length - 1;
-                return (
-                  <div
-                    key={`${r}-${c}`}
-                    className={`cell${isPath ? ' path' : ''}`}
-                    style={{ background: cellColor(r, c) }}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleCellAction(r, c, e.button === 2);
-                    }}
-                    onMouseEnter={(e) => {
-                      if (dragging.current && mode === 'draw') {
-                        handleCellAction(r, c, dragging.current === 'right');
-                      }
-                    }}
-                    onContextMenu={(e) => e.preventDefault()}
-                  />
-                );
-              }),
-            )}
-          </div>
+          {viewMode === 'grid' ? (
+            <>
+              <div
+                className="grid"
+                style={{ cursor: mode === 'draw' ? 'crosshair' : 'pointer' }}
+                onContextMenu={(e) => e.preventDefault()}
+                onMouseDown={(e) => {
+                  // set dragging to left or right directly (avoid assigning boolean `true`)
+                  dragging.current = e.button === 2 ? 'right' : 'left';
+                }}
+                onMouseUp={() => {
+                  dragging.current = false;
+                }}
+                onMouseLeave={() => {
+                  dragging.current = false;
+                }}
+              >
+                {grid.map((row, r) =>
+                  row.map((_, c) => {
+                    const isPath =
+                      pathSet.has(`${r},${c}`) &&
+                      run.status === 'goal-found' &&
+                      stepIndex === run.steps.length - 1;
+                    return (
+                      <div
+                        key={`${r}-${c}`}
+                        className={`cell${isPath ? ' path' : ''}`}
+                        style={{ background: cellColor(r, c) }}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleCellAction(r, c, e.button === 2);
+                        }}
+                        onMouseEnter={(e) => {
+                          if (dragging.current && mode === 'draw') {
+                            handleCellAction(r, c, dragging.current === 'right');
+                          }
+                        }}
+                        onContextMenu={(e) => e.preventDefault()}
+                      />
+                    );
+                  }),
+                )}
+              </div>
 
-          <div className="legend">
-            {[
-              ['Empty', '#ffffff'],
-              ['Wall', '#000000'],
-              ['Start', '#2ecc71'],
-              ['Goal', '#e74c3c'],
-              ['Current', '#f1c40f'],
-              ['Frontier', '#3498db'],
-              ['Newly added', '#00cec9'],
-              ['Explored', '#7f8c8d'],
-            ].map(([label, color]) => (
-              <span key={label} className="legend-item">
-                <span className="legend-swatch" style={{ background: color as string }} />
-                {label}
-              </span>
-            ))}
-            <span className="legend-item">
-              <span className="legend-swatch" style={{ background: '#6C5CE7', boxShadow: '0 0 10px 4px rgba(108,92,231,0.6)' }} />
-              Path glow
-            </span>
-          </div>
+              <div className="legend">
+                {[
+                  ['Empty', '#ffffff'],
+                  ['Wall', '#000000'],
+                  ['Start', '#2ecc71'],
+                  ['Goal', '#e74c3c'],
+                  ['Current', '#f1c40f'],
+                  ['Frontier', '#3498db'],
+                  ['Newly added', '#00cec9'],
+                  ['Explored', '#7f8c8d'],
+                ].map(([label, color]) => (
+                  <span key={label} className="legend-item">
+                    <span className="legend-swatch" style={{ background: color as string }} />
+                    {label}
+                  </span>
+                ))}
+                <span className="legend-item">
+                  <span className="legend-swatch" style={{ background: '#6C5CE7', boxShadow: '0 0 10px 4px rgba(108,92,231,0.6)' }} />
+                  Path glow
+                </span>
+              </div>
+            </>
+          ) : (
+            <TreeView
+              treeNodes={currentEvent?.treeNodes || []}
+              expandedNodeId={currentEvent?.expandedNodeId || null}
+              newlyGeneratedIds={currentEvent?.newlyGeneratedIds || []}
+              exploredIds={new Set(currentEvent?.explored.map((c) => `${c.row},${c.col}`) || [])}
+              pathIds={new Set(run.pathIds)}
+              currentNodeId={currentEvent?.expandedNodeId || null}
+              isGoalFound={run.status === 'goal-found' && stepIndex === run.steps.length - 1}
+            />
+          )}
         </div>
 
         <div className="panel info">

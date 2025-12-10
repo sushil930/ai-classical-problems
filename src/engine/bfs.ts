@@ -9,12 +9,25 @@ export type BfsEvent = {
   neighbours: Cell[];
   depth: number;
   status: 'running' | 'goal-found' | 'finished' | 'blocked';
+  // Tree view support
+  treeNodes?: TreeNode[];
+  expandedNodeId?: string;
+  newlyGeneratedIds?: string[];
 };
 
 export type BfsResult = {
   status: 'goal-found' | 'finished' | 'blocked';
   path: Cell[];
+  pathIds?: string[];
   steps: BfsEvent[];
+};
+
+export type TreeNode = {
+  id: string;
+  parentId: string | null;
+  state: Cell;
+  depth: number;
+  children: string[];
 };
 
 const key = (c: Cell) => `${c.row},${c.col}`;
@@ -39,6 +52,11 @@ export function bfsEngine(input: { start: Cell; goal: Cell; grid: Grid }): BfsRe
   const parent = new Map<string, Cell>();
   const explored: Cell[] = [];
   const steps: BfsEvent[] = [];
+  const tree = new Map<string, TreeNode>();
+
+  // root node
+  const rootId = key(start);
+  tree.set(rootId, { id: rootId, parentId: null, state: start, depth: 0, children: [] });
 
   queue.push({ ...start, depth: 0 });
   visited.add(key(start));
@@ -51,6 +69,9 @@ export function bfsEngine(input: { start: Cell; goal: Cell; grid: Grid }): BfsRe
     neighbours: [],
     depth: 0,
     status: 'running',
+    treeNodes: [...tree.values()],
+    expandedNodeId: rootId,
+    newlyGeneratedIds: [],
   });
 
   while (queue.length > 0) {
@@ -60,6 +81,9 @@ export function bfsEngine(input: { start: Cell; goal: Cell; grid: Grid }): BfsRe
 
     const neighbours: Cell[] = [];
     const newlyAdded: Cell[] = [];
+    const newlyGeneratedIds: string[] = [];
+
+    const currentId = key(current);
 
     for (const d of deltas) {
       const n: Cell = { row: current.row + d.row, col: current.col + d.col };
@@ -71,6 +95,21 @@ export function bfsEngine(input: { start: Cell; goal: Cell; grid: Grid }): BfsRe
         parent.set(k, current);
         queue.push({ ...n, depth: depth + 1 });
         newlyAdded.push(n);
+
+        // add to tree
+        const child: TreeNode = {
+          id: k,
+          parentId: currentId,
+          state: n,
+          depth: depth + 1,
+          children: [],
+        };
+        tree.set(k, child);
+        const parentNode = tree.get(currentId);
+        if (parentNode) {
+          parentNode.children.push(k);
+        }
+        newlyGeneratedIds.push(k);
       }
     }
 
@@ -91,27 +130,37 @@ export function bfsEngine(input: { start: Cell; goal: Cell; grid: Grid }): BfsRe
       neighbours: [...neighbours],
       depth,
       status,
+      treeNodes: [...tree.values()],
+      expandedNodeId: currentId,
+      newlyGeneratedIds,
     });
 
     if (status === 'goal-found') {
-      return { status, path: reconstructPath(start, goal, parent), steps };
+      const { path, pathIds } = reconstructPath(start, goal, parent);
+      return { status, path, pathIds, steps };
     }
   }
 
-  return { status: steps[steps.length - 1]?.status ?? 'finished', path: [], steps };
+  // Ensure returned status matches BfsResult.status union
+  const lastRawStatus = steps[steps.length - 1]?.status ?? 'finished';
+  const lastStatus: BfsResult['status'] = lastRawStatus === 'running' ? 'finished' : (lastRawStatus as BfsResult['status']);
+  return { status: lastStatus, path: [], pathIds: [], steps };
 }
 
-function reconstructPath(start: Cell, goal: Cell, parent: Map<string, Cell>): Cell[] {
+function reconstructPath(start: Cell, goal: Cell, parent: Map<string, Cell>): { path: Cell[]; pathIds: string[] } {
   const path: Cell[] = [];
+  const pathIds: string[] = [];
   const startKey = key(start);
   const goalKey = key(goal);
-  if (startKey !== goalKey && !parent.has(goalKey)) return path;
+  if (startKey !== goalKey && !parent.has(goalKey)) return { path, pathIds };
 
   let cur: Cell | undefined = goal;
   while (cur) {
+    const k = key(cur);
     path.unshift(cur);
-    if (key(cur) === startKey) break;
-    cur = parent.get(key(cur));
+    pathIds.unshift(k);
+    if (k === startKey) break;
+    cur = parent.get(k);
   }
-  return path;
+  return { path, pathIds };
 }
