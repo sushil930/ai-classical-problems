@@ -119,8 +119,8 @@ export default function App() {
     const isNew = currentEvent.newlyAdded.some((p) => p.row === r && p.col === c);
 
     if (isCurrent) return '#f1c40f';
-    if (isNew) return '#3498db';
-    if (inFrontier) return '#2980b9';
+    if (isNew) return '#00cec9'; // Teal/Cyan for newly added
+    if (inFrontier) return '#3498db'; // Blue for frontier
     if (inExplored) return '#7f8c8d';
     return '#ffffff';
   };
@@ -134,115 +134,183 @@ export default function App() {
   return (
     <main>
       <h1>AI Classical Problem Simulator — BFS</h1>
-      <div className="controls">
-        <button onClick={runBfs}>Run BFS</button>
-        <button onClick={stepBack} disabled={!run.steps.length || stepIndex === 0 || isPlaying}>
-          Step -
-        </button>
-        <button
-          onClick={stepForward}
-          disabled={!run.steps.length || stepIndex >= run.steps.length - 1 || isPlaying}
-        >
-          Step +
-        </button>
-        <button onClick={() => setIsPlaying((p) => !p)} disabled={!run.steps.length}>
-          {isPlaying ? 'Pause' : 'Auto-run'}
-        </button>
-        <button onClick={reset}>Reset</button>
-        <label>
-          Speed ({speedMs} ms)
-          <input
-            type="range"
-            min={50}
-            max={800}
-            step={25}
-            value={speedMs}
-            onChange={(e) => setSpeedMs(Number(e.target.value))}
-          />
-        </label>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {[
-            ['Draw', 'draw'],
-            ['Wall', 'wall'],
-            ['Start', 'start'],
-            ['Goal', 'goal'],
-          ].map(([label, value]) => (
-            <button
-              key={value}
-              onClick={() => setMode(value as Mode)}
-              style={{
-                border: mode === value ? '2px solid #6C5CE7' : '1px solid #444',
-                background: mode === value ? '#1f2230' : '#161925',
-                color: '#e6e6e6',
-                padding: '6px 10px',
-                borderRadius: 6,
-              }}
+      
+      <div className="layout">
+        <div className="panel controls">
+          <div className="control-group">
+            <label>Algorithm Control</label>
+            <button 
+              onClick={runBfs} 
+              disabled={isPlaying || (run.steps.length > 0 && run.status === 'running')}
             >
-              {label}
+              {run.steps.length > 0 ? 'Restart BFS' : 'Run BFS'}
             </button>
-          ))}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={stepBack} disabled={!run.steps.length || stepIndex === 0 || isPlaying} style={{ flex: 1 }}>
+                Step -
+              </button>
+              <button onClick={stepForward} disabled={!run.steps.length || stepIndex >= run.steps.length - 1 || isPlaying} style={{ flex: 1 }}>
+                Step +
+              </button>
+            </div>
+            <button onClick={() => setIsPlaying((p) => !p)} disabled={!run.steps.length}>
+              {isPlaying ? 'Pause' : 'Auto-run'}
+            </button>
+            <button onClick={reset}>Reset Grid</button>
+          </div>
+
+          <div className="control-group">
+            <label>Speed ({speedMs} ms)</label>
+            <input
+              type="range"
+              min={50}
+              max={800}
+              step={25}
+              value={speedMs}
+              onChange={(e) => setSpeedMs(Number(e.target.value))}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>Edit Mode</label>
+            <div className="mode-buttons">
+              {[
+                ['Draw', 'draw'],
+                ['Wall', 'wall'],
+                ['Start', 'start'],
+                ['Goal', 'goal'],
+              ].map(([label, value]) => (
+                <button
+                  key={value}
+                  onClick={() => setMode(value as Mode)}
+                  className={mode === value ? 'active' : ''}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-        <span>
-          Step {run.steps.length ? stepIndex + 1 : 0}/{run.steps.length} — Status:{' '}
-          {currentEvent?.status ?? 'idle'}
-        </span>
-      </div>
 
-      <div
-        className="grid"
-        onMouseDown={() => {
-          dragging.current = true;
-        }}
-        onMouseUp={() => {
-          dragging.current = false;
-        }}
-        onMouseLeave={() => {
-          dragging.current = false;
-        }}
-      >
-        {grid.map((row, r) =>
-          row.map((_, c) => {
-            const isPath =
-              pathSet.has(`${r},${c}`) &&
-              run.status === 'goal-found' &&
-              stepIndex === run.steps.length - 1;
-            return (
-              <div
-                key={`${r}-${c}`}
-                className={`cell${isPath ? ' path' : ''}`}
-                style={{ background: cellColor(r, c) }}
-                onMouseDown={() => handleCellAction(r, c)}
-                onMouseEnter={() => {
-                  if (dragging.current && (mode === 'wall' || mode === 'draw')) handleCellAction(r, c);
-                }}
-                onClick={() => handleCellAction(r, c)}
-              />
-            );
-          }),
-        )}
-      </div>
+        <div className="grid-container">
+          <div
+            className="grid"
+            style={{ cursor: mode === 'draw' || mode === 'wall' ? 'crosshair' : 'pointer' }}
+            onMouseDown={() => {
+              dragging.current = true;
+            }}
+            onMouseUp={() => {
+              dragging.current = false;
+            }}
+            onMouseLeave={() => {
+              dragging.current = false;
+            }}
+          >
+            {grid.map((row, r) =>
+              row.map((_, c) => {
+                const isPath =
+                  pathSet.has(`${r},${c}`) &&
+                  run.status === 'goal-found' &&
+                  stepIndex === run.steps.length - 1;
+                return (
+                  <div
+                    key={`${r}-${c}`}
+                    className={`cell${isPath ? ' path' : ''}`}
+                    style={{ background: cellColor(r, c) }}
+                    onMouseDown={() => handleCellAction(r, c)}
+                    onMouseEnter={() => {
+                      if (dragging.current && (mode === 'wall' || mode === 'draw')) handleCellAction(r, c);
+                    }}
+                    onClick={() => handleCellAction(r, c)}
+                  />
+                );
+              }),
+            )}
+          </div>
 
-      <div className="legend">
-        {[
-          ['Empty', '#ffffff'],
-          ['Wall', '#000000'],
-          ['Start', '#2ecc71'],
-          ['Goal', '#e74c3c'],
-          ['Current', '#f1c40f'],
-          ['Frontier', '#2980b9'],
-          ['Newly added', '#3498db'],
-          ['Explored', '#7f8c8d'],
-        ].map(([label, color]) => (
-          <span key={label} className="legend-item">
-            <span className="legend-swatch" style={{ background: color as string }} />
-            {label}
-          </span>
-        ))}
-        <span className="legend-item">
-          <span className="legend-swatch" style={{ background: '#6C5CE7', boxShadow: '0 0 10px 4px rgba(108,92,231,0.6)' }} />
-          Path glow
-        </span>
+          <div className="legend">
+            {[
+              ['Empty', '#ffffff'],
+              ['Wall', '#000000'],
+              ['Start', '#2ecc71'],
+              ['Goal', '#e74c3c'],
+              ['Current', '#f1c40f'],
+              ['Frontier', '#3498db'],
+              ['Newly added', '#00cec9'],
+              ['Explored', '#7f8c8d'],
+            ].map(([label, color]) => (
+              <span key={label} className="legend-item">
+                <span className="legend-swatch" style={{ background: color as string }} />
+                {label}
+              </span>
+            ))}
+            <span className="legend-item">
+              <span className="legend-swatch" style={{ background: '#6C5CE7', boxShadow: '0 0 10px 4px rgba(108,92,231,0.6)' }} />
+              Path glow
+            </span>
+          </div>
+        </div>
+
+        <div className="panel info">
+          <div className="control-group">
+            <label>Status</label>
+            <div className="stat-row">
+              <span className="stat-label">State</span>
+              <span className="stat-value" style={{ textTransform: 'capitalize' }}>
+                {currentEvent?.status ?? 'Idle'}
+              </span>
+            </div>
+            <div className="stat-row">
+              <span className="stat-label">Step</span>
+              <span className="stat-value">
+                {run.steps.length ? stepIndex + 1 : 0} / {run.steps.length}
+              </span>
+            </div>
+            <div className="stat-row">
+              <span className="stat-label">Depth</span>
+              <span className="stat-value">{currentEvent?.depth ?? 0}</span>
+            </div>
+            {run.status === 'goal-found' && stepIndex === run.steps.length - 1 && (
+              <div className="stat-row">
+                <span className="stat-label">Path Length</span>
+                <span className="stat-value">{run.path.length}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="control-group">
+            <label>Queue Viewer</label>
+            <div className="stat-row">
+              <span className="stat-label">Frontier Size</span>
+              <span className="stat-value">{currentEvent?.frontier.length ?? 0}</span>
+            </div>
+            <div className="stat-row">
+              <span className="stat-label">Explored Size</span>
+              <span className="stat-value">{currentEvent?.explored.length ?? 0}</span>
+            </div>
+            {currentEvent?.frontier && currentEvent.frontier.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: '0.85em', color: '#b2bec3' }}>
+                <div>Next in queue:</div>
+                <div style={{ 
+                  display: 'flex', gap: 4, flexWrap: 'wrap', 
+                  marginTop: 4, maxHeight: 60, overflowY: 'auto' 
+                }}>
+                  {currentEvent.frontier.slice(0, 10).map((c, i) => (
+                    <span key={i} style={{ 
+                      background: '#2d3436', padding: '2px 6px', borderRadius: 4,
+                      border: i === 0 ? '1px solid #f1c40f' : '1px solid #636e72'
+                    }}>
+                      ({c.row},{c.col})
+                    </span>
+                  ))}
+                  {currentEvent.frontier.length > 10 && <span>...</span>}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </main>
   );
 }
+
